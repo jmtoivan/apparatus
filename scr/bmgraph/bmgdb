@@ -1,0 +1,63 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import sys
+import logging
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger("bmgdb")
+
+import traceback
+from optparse import OptionParser
+from pprint import pprint
+import UserDict
+import sqlite3
+
+import db as bmgraph_db
+
+def main():
+    parser = OptionParser()
+    parser.add_option("-a", "--action", dest="action",
+                      help="choose ACTION [build|suggest|edges|sample]", metavar="ACTION")
+    parser.add_option("-b", "--bmg", dest="bmg",
+                      help="BMGraph file to use for build",
+                      metavar="BMGRAPH-FILE")
+    parser.add_option("-d", "--database", dest="db",
+                      help="sqlite database file to use for build",
+                      metavar="DATABASE--FILE")
+    opts, args = parser.parse_args()
+
+    if not opts.action:
+        parser.error("Action must be specified.")
+    if not opts.db:
+        parser.error("Database must be specified.")
+
+    conn = sqlite3.connect(opts.db)
+    # conn = sqlite3.connect(':memory:')
+    conn.row_factory = sqlite3.Row
+    args = [arg.decode('utf-8', 'replace') for arg in args]
+    if opts.action == 'build':
+        bmgraph_db.logger.setLevel(logging.INFO)
+        bmgraph_db.build_db(conn, opts.bmg)
+    elif opts.action == 'suggest':
+        if len(args) < 1:
+            parser.error("suggest takes 1 or more parameters: pattern and optionally searchable fields")
+        if len(args) > 1:
+            bmgraph_db.suggest(conn, args[0], args[1:], print_results=True)
+        else:
+            bmgraph_db.suggest(conn, args[0], [], print_results=True)
+    elif opts.action == 'edges':
+        bmgraph_db.edges(conn, args[0], print_results=True)
+    elif opts.action == 'sample':
+        if len(args) < 1:
+            parser.error("sample takes 1 or more parameters: count and an arbitrary many attribute=value+with+plus+as+space or attribute>numericvalue pairs; constraints are not currently implemented")
+        attributes = None
+        if len(args) > 1:
+            attributes = {}
+            for arg in args[1:]:
+                k, v = arg.split("=")
+                v = v.replace("+", " ")
+        bmgraph_db.sample(conn, int(args[0]), constraints=attributes, print_results=True)
+
+
+if __name__ == '__main__':
+    main()
